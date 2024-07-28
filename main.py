@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 
 MAX_WIDTH = 800
 MAX_HEIGHT = 600
+ANNOTATION_FILE = "annotations.json"
 
 class AnnotatorApp:
     def __init__(self, root):
@@ -28,6 +29,7 @@ class AnnotatorApp:
         self.image_scale = 1
 
         self.annotations = {}
+        self.folder_path = ""
 
         self.load_folder_button = tk.Button(root, text="Load Folder", command=self.load_folder)
         self.load_folder_button.pack(side=tk.LEFT)
@@ -58,11 +60,13 @@ class AnnotatorApp:
     def load_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
+            self.folder_path = folder_path
             self.image_list = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
             self.image_list.sort()
             self.image_index = 0
             self.load_image()
             self.adjust_window_size()
+            self.load_annotations_from_file()
 
     def load_image(self):
         if self.image_list:
@@ -178,6 +182,7 @@ class AnnotatorApp:
             self.image_index += 1
             self.load_image()
             self.adjust_window_size()
+            self.save_annotations()
 
     def prev_image(self):
         if self.image_list and self.image_index > 0:
@@ -185,6 +190,7 @@ class AnnotatorApp:
             self.image_index -= 1
             self.load_image()
             self.adjust_window_size()
+            self.save_annotations()
 
     def save_annotations_for_current_image(self):
         if self.image_list:
@@ -195,19 +201,34 @@ class AnnotatorApp:
     def load_annotations_for_current_image(self):
         if self.image_list:
             image_path = self.image_list[self.image_index]
-            import pdb; pdb.set_trace()
-            self.rectangles = [(r[:4], r[4], self.get_color_for_id(r[4])) for r in self.annotations.get(image_path, [])]
+            self.rectangles = [(self.scale_rect(r[:4]), r[4], self.get_color_for_id(r[4])) for r in self.annotations.get(image_path, [])]
             self.redraw_rectangles()
 
+    def scale_rect(self, rect):
+        return (
+            rect[0] * self.image_scale,
+            rect[1] * self.image_scale,
+            rect[2] * self.image_scale,
+            rect[3] * self.image_scale
+        )
+
     def save_annotations(self):
-        annotation_file = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
-        if annotation_file:
+        if self.folder_path:
+            annotation_file = os.path.join(self.folder_path, ANNOTATION_FILE)
             with open(annotation_file, 'w') as f:
                 json.dump(self.annotations, f)
 
     def load_annotations(self):
-        annotation_file = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
-        if annotation_file:
+        if self.folder_path:
+            annotation_file = os.path.join(self.folder_path, ANNOTATION_FILE)
+            if os.path.exists(annotation_file):
+                with open(annotation_file, 'r') as f:
+                    self.annotations = json.load(f)
+                self.load_annotations_for_current_image()
+
+    def load_annotations_from_file(self):
+        annotation_file = os.path.join(self.folder_path, ANNOTATION_FILE)
+        if os.path.exists(annotation_file):
             with open(annotation_file, 'r') as f:
                 self.annotations = json.load(f)
             self.load_annotations_for_current_image()
